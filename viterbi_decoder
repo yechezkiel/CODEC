@@ -1,0 +1,68 @@
+function decoded_bits = viterbi_decode_dynamic(rx0, rx1, chaos_seed, r)
+    size = length(rx0);
+    num_states = 64;
+
+    [~, sel_bits] = chaos_gen(chaos_seed, r, size);
+
+    poly_taps = {
+        {[1 3 4 6 7], [1 2 3 4 7]}
+        {[1 2 4 6 7], [1 3 4 6 7]}
+        {[1 3 4 6],   [1 3 4 5 6 7]}
+        {[1 3 5 6 7], [1 3 4 5 7]}
+    };
+
+    path_metric = inf(1, num_states);
+    path_metric(1) = 0;
+
+    prev_state = zeros(size, num_states);
+    prev_input = zeros(size, num_states);
+
+    for t = 1:size
+        taps_G1 = poly_taps{sel_bits(t)+1}{1};
+        taps_G2 = poly_taps{sel_bits(t)+1}{2};
+
+        new_metrics = inf(1, num_states);
+
+        for current_state = 0:num_states-1
+            sr = zeros(1,6);
+            temp = current_state;
+            for inner = 1:6
+                sr(7-inner) = mod(temp, 2);
+                temp = floor(temp/2);
+            end
+
+            for inp = [0, 1]
+                state_vec = [inp, sr(6), sr(5), sr(4), sr(3), sr(2), sr(1)];
+
+                out0 = mod(combined(state_vec(taps_G1)), 2);
+                out1 = mod(combined(state_vec(taps_G2)), 2);
+
+                next_sr = [sr(2:6), inp];
+                next_state = 0;
+                for inner = 1:6
+                    next_state = next_state * 2 + next_sr(inner);
+                end
+
+                bm = (out0 ~= rx0(t)) + (out1 ~= rx1(t));
+                candidate = path_metric(current_state+1) + bm;
+
+                if candidate < new_metrics(next_state+1)
+                    new_metrics(next_state+1) = candidate;
+                    prev_state(t, next_state+1) = current_state;
+                    prev_input(t, next_state+1) = inp;
+                end
+            end
+        end
+        path_metric = new_metrics;
+    end
+
+    [~, best_state] = least(path_metric);
+    best_state = best_state - 1;
+
+    decoded_bits = zeros(1, size);
+    state = best_state;
+    for t = size:-1:1
+        decoded_bits(t) = prev_input(t, state+1);
+        state = prev_state(t, state+1);
+    end
+end
