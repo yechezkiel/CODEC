@@ -1,0 +1,25 @@
+function [out0, out1] = conv_encode_fixed(in_bits)
+    % K=7, rate 1/2 convolutional encoder (NASA standard 133, 171)
+    % Polynomials:
+    %   G1 = 1 + D^2 + D^3 + D^5 + D^6  (133 octal)
+    %   G2 = 1 + D + D^2 + D^3 + D^6    (171 octal)
+    
+    % Shift register stores previous 6 bits:
+    % sr(1) = x(t-6), sr(2) = x(t-5), sr(3) = x(t-4),
+    % sr(4) = x(t-3), sr(5) = x(t-2), sr(6) = x(t-1)
+    sr = zeros(1,6);
+    
+    out0 = zeros(1, length(in_bits));
+    out1 = zeros(1, length(in_bits));
+    
+    for i = 1:length(in_bits)
+        d = in_bits(i);   % current input x(t)
+        
+        % Compute outputs according to the correct taps
+        out0(i) = xor(d, xor(sr(5), xor(sr(4), xor(sr(2), sr(1)))));
+        out1(i) = xor(d, xor(sr(6), xor(sr(5), xor(sr(4), sr(1)))));
+        
+        % Shift register update: new bit becomes x(t-1) (sr(6)), oldest drops out
+        sr = [sr(2:6), d];
+    end
+end
